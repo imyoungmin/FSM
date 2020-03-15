@@ -3,7 +3,7 @@ from typing import Dict, Tuple, List
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
-from multiprocessing import Pool
+import multiprocessing
 import time
 
 """
@@ -133,6 +133,9 @@ class FSM:
 		if not len( self._Gamma ):
 			raise Exception( "Uninitialized interface!")
 
+		if processes <= 1 or processes > multiprocessing.cpu_count() - 2:		# Invalid number of requested processes.
+			raise Exception( "Invalid number of processes.  Choose between 2 and", ( multiprocessing.cpu_count() - 2 ) )
+
 		# Indices for traversing the 2D field.
 		I: np.ndarray = np.array( range( self._M ) )
 		J: np.ndarray = np.array( range( self._M ) )
@@ -150,19 +153,15 @@ class FSM:
 					I1 = max( 0, level - self._M + 1 )		# Lower bound for discrete x coords.
 					I2 = min( self._M - 1, level )			# Upper bound for discrete x coords (inclusive).
 
-					params: List[Tuple[FSM, Tuple[int, int]]] = []	# A list of references to this class and tuples of discrete coords along the current level
-																	# interleaved: [(self, (i0, j0)), (self, (i1, j1)), ...]
-					for i in range( I1, I2 + 1 ):					# Gather the coords we'll process parallely.
+					coords: List[Tuple[int, int]] = []		# A list of grid point coordinates to update along current level.
+					for i in range( I1, I2 + 1 ):			# Gather the coords we'll (probably) process parallely.
 						j = level - i
-						params.append( (self, (I[i], J[j])) )		# Recall: accessing the "rotated axes" coordinates.
+						coord = (I[i], J[j])						# Recall: accessing the "rotated axes" coordinates.
 
-					pool = Pool( processes=processes )
-					updates = pool.starmap( FSM._update, params )  	# Each coordinate pair in its own thread.
-					pool.close()
-					pool.join()
+						if self._Gamma.get( coord ) is None:		# Skip interface/fixed nodes.
+							coords.append( coord )
 
-					for update in updates:							# Write data into discrete solution grid.
-						self._U[update[0]] = update[1]
+					self._loadBalancing( coords, processes )
 
 				print( " {} seconds".format( time.time() - startTime ) )
 
@@ -176,6 +175,63 @@ class FSM:
 			errorNorm = np.max( np.mean( np.abs( self._U - U_old ), axis=0 ) )
 
 		print( "Done after {} seconds".format( time.time() - rootTime ) )
+
+
+	def _loadBalancing( self, coords: List[Tuple[int, int]], processes: int ):
+		"""
+		Compute new values for solution by load-balancing calculations among processes (if necessary).
+		:param coords: A list of discrete coordinates to update.
+		:param processes: A valid number of processes to consider.
+		"""
+
+		# Determine if we need to use multiprocessing at all.
+		nodeCount = len( coords )
+		if not len( coords ):
+			return
+
+		if nodeCount < 3 * processes:		# If there are less than 3 nodes per processor proceed serially.
+			for coord in coords:
+				_, u = self._update( coord )
+				self._U[coord] = u
+		else:								# Share load among requested processes.
+			requests: List[Tuple[FSM, List[Tuple[int, int]]]] = []		# List of the form [(self, [(i0,j0),(i1,j1),...]), (self, [(i0,j0),(i1,j1),...]), ...]
+			points: List[Tuple[int, int]] = []
+			nodesPerProcess = nodeCount // processes
+			includingInLastGroup = nodesPerProcess * processes	# Don't create a new group when reaching this node index in the list of coords.
+			i = 0
+			while i < len( coords ):
+				points.append( coords[i] )
+				i += 1
+				if i % nodesPerProcess == 0 and i != includingInLastGroup:		# Create a new group, except in the last subset of coords.
+					requests.append( ( self, points ) )
+					points = []
+
+			requests.append( ( self, points ) )					# Don't forget to append last group.
+
+			# Process each group of coordinates in its own thread.
+			pool = multiprocessing.Pool( processes=processes )
+			updateChunks: List[List[Tuple[Tuple[int, int], float]]] = pool.starmap( FSM._parallelProcessRequests, requests )
+			pool.close()
+			pool.join()
+
+			# Process results.
+			for updateList in updateChunks:  					# Write data into discrete solution grid.
+				for updateTuple in updateList:
+					self._U[updateTuple[0]] = updateTuple[1]
+
+
+	def _parallelProcessRequests( self, coords: List[Tuple[int, int]] ) -> List[Tuple[Tuple[int, int], float]]:
+		"""
+		Process requests in parallel.
+		:param coords: List of coordinates.
+		:return: A list of update tuples: [((i0,j0), u_new), ...].
+		"""
+		result: List[Tuple[Tuple[int, int], float]] = []
+
+		for coord in coords:
+			result.append( self._update( coord ) )
+
+		return result
 
 
 	def plotSurface( self ):
