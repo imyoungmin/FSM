@@ -7,5 +7,5 @@ importlib.reload( fsm )
 
 fsmObj = fsm.FSM( 11 )
 fsmObj.definePointAtOriginInterface()
-fsmObj.goSerial()
+fsmObj.goParallel()
 fsmObj.plotSurface()
