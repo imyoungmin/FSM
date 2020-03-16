@@ -5,12 +5,15 @@ importlib.reload( fsm )
 
 #################### Signed distance function to origin ####################
 
-fsmSerial = fsm.FSM( 101 )
-fsmSerial.definePointAtOriginInterface()
-fsmSerial.goSerial()
-fsmSerial.plotSurface()
+if __name__ == '__main__':
+	# Serial.
+	# fsmSerial = fsm.Serial( 11 )
+	# fsmSerial.definePointAtOriginInterface()
+	# fsmSerial.go()
+	# fsmSerial.plotSurface()
 
-fsmParallel = fsm.FSM( 101 )
-fsmParallel.definePointAtOriginInterface()
-fsmParallel.goParallel()
-fsmParallel.plotSurface()
+	# Parallel.
+	fsmParallel = fsm.Parallel( 101 )
+	fsmParallel.definePointAtOriginInterface()
+	fsmParallel.go( processes=4 )
+	fsmParallel.plotSurface()
