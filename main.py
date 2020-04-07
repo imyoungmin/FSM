@@ -7,13 +7,13 @@ importlib.reload( fsm )
 
 if __name__ == '__main__':
 	# Serial.
-	# fsmSerial = fsm.Serial( 11 )
-	# fsmSerial.definePointAtOriginInterface()
-	# fsmSerial.go()
-	# fsmSerial.plotSurface()
+	fsmSerial = fsm.Serial( 21, -1, 1 )
+	fsmSerial.definePointAtOriginInterface()
+	fsmSerial.go()
+	fsmSerial.plotSurface()
 
 	# Parallel.
-	fsmParallel = fsm.Parallel( 101 )
-	fsmParallel.definePointAtOriginInterface()
-	fsmParallel.go( processes=4 )
-	fsmParallel.plotSurface()
+	# fsmParallel = fsm.Parallel( 101 )
+	# fsmParallel.definePointAtOriginInterface()
+	# fsmParallel.go( processes=4 )
+	# fsmParallel.plotSurface()
